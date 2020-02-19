@@ -1,0 +1,2 @@
+libscrc == 0.1.6
+pyserial == 3.4
