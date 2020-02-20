@@ -8,6 +8,7 @@
 # Package:  None.
 # Drivers:  None.
 # History:  2020-02-18 Ver:1.0 [Heyn] Initialization
+#           2020-02-20 Ver:1.1 [Heyn] New add read & write function.
 
 __author__    = 'Heyn'
 __version__   = '1.0'
@@ -274,13 +275,13 @@ class ImpinjR2KReader( object ):
         ant  = ( data[-2] & 0x03 + 1 )
         invcount = data[-1]
 
-        logging.info( '*'*50 )
-        logging.info( 'COUNT    : {}'.format( count ) )
-        logging.info( 'EPC      : {}'.format( epc   ) )
-        logging.info( 'CRC      : {:X}'.format( crc   ) )
-        logging.info( 'RSSI     : {}'.format( rssi  ) )
-        logging.info( 'ANT      : {}'.format( ant   ) )
-        logging.info( 'INVCOUNT : {}'.format( invcount   ) )
+        logging.debug( '*'*50 )
+        logging.debug( 'COUNT    : {}'.format( count ) )
+        logging.debug( 'EPC      : {}'.format( epc   ) )
+        logging.debug( 'CRC      : {:X}'.format( crc   ) )
+        logging.debug( 'RSSI     : {}'.format( rssi  ) )
+        logging.debug( 'ANT      : {}'.format( ant   ) )
+        logging.debug( 'INVCOUNT : {}'.format( invcount   ) )
 
         return epc
 
@@ -305,4 +306,115 @@ class ImpinjR2KReader( object ):
         self.protocol.reset_inventory_buffer()
 
     #-------------------------------------------------
+    @analyze_data()
+    def set_access_epc_match( self, mode=0, epc='00'*12 ):
+        self.protocol.set_access_epc_match( mode=mode, epc=list( bytearray.fromhex( epc ) ) )
 
+    def read( self, epc:str, bank='EPC', address=0, size=2, password=[ 0 ]*4 ):
+        """
+            EPC  -> address=0, size=8
+            TID  -> address=0, size=3
+            USER -> address=0, size=4
+        """
+        result = self.set_access_epc_match( mode=0, epc=epc )
+        if not result[0]:
+            logging.error( result[1] )
+            return ''
+
+        self.protocol.read( bank=bank, addr=address, size=size, password=password )
+        value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+
+        try:
+            count, length = struct.unpack( '>HB', value[0:3] )
+        except BaseException:
+            logging.error( ImpinjR2KGlobalErrors.to_string( value[0] ) )
+            return ''
+
+        pc   = struct.unpack( '>H', value[3:5] )[0]
+        size = ( ( pc & 0xF800 ) >> 10 ) & 0x003E
+        epc  = ''.join( [ '%02X' % x for x in value[5:size+5] ] )
+
+        crc  = struct.unpack( '>H', value[size+5:size+5+2] )[0]
+        if crc != ( libscrc.xmodem( value[3:size+5], 0xFFFF ) ^ 0xFFFF ):
+            logging.error( 'TAGS CRC16 IS ERROR.')
+            return ''
+
+        datasize = value[-3]
+        antenna  = ( value[-2] & 0x03 ) + 1
+        invcount = value[-1]
+
+        data_offset_head = size + 5 + 2
+        data_offset_tail = ( data_offset_head + datasize )
+
+        data = ''.join( [ '%02X' % x for x in value[ data_offset_head:data_offset_tail ] ] )
+
+        logging.debug( '*'*50 )
+        logging.debug( 'COUNT    : {}'.format( count  ) )
+        logging.debug( 'LENGTH   : {}'.format( length ) )
+        logging.debug( 'SIZE     : {}'.format( size   ) )
+        logging.debug( 'EPC      : {}'.format( epc    ) )
+        logging.debug( 'CRC      : {:X}'.format( crc  ) )
+        logging.debug( 'DATA     : {}'.format( data   ) )
+        logging.debug( 'DATASIZE : {}'.format( datasize  ) )
+        logging.debug( 'ANT      : {}'.format( antenna   ) )
+        logging.debug( 'INVCOUNT : {}'.format( invcount  ) )
+
+        logging.info( 'READ: {}'.format( data ) )
+
+        return data
+
+    def write( self, epc:str, data:str, bank='EPC', address=0, password=[ 0 ]*4 ):
+        """ Write Tag to ( EPC, TID, USER )
+            EPC  -> address=2, size=8
+            TID  -> address=0, size=3
+            USER -> address=0, size=4
+        """
+        assert( type( epc ) is str ) and ( type( data ) is str )
+
+        result = self.set_access_epc_match( mode=0, epc=epc )
+        if not result[0]:
+            logging.error( result[1] )
+            return ''
+
+        try:
+            self.protocol.write_block( list( bytearray.fromhex( data ) ),
+                                       bank=bank,
+                                       addr=address,
+                                       password=password )
+        except BaseException:
+            logging.error( 'Data must be hex string.' )
+            return ''
+
+        value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+
+        try:
+            count, length = struct.unpack( '>HB', value[0:3] )
+        except BaseException:
+            logging.error( ImpinjR2KGlobalErrors.to_string( value[0] ) )
+            return ''
+
+        if (length + 6) != len( value ):
+            return ''
+
+        pc   = struct.unpack( '>H', value[3:5] )[0]
+        size = ( ( pc & 0xF800 ) >> 10 ) & 0x003E
+        epc  = ''.join( [ '%02X' % x for x in value[5:size+5] ] )
+
+        crc  = struct.unpack( '>H', value[size+5:size+5+2] )[0]
+        if crc != ( libscrc.xmodem( value[3:size+5], 0xFFFF ) ^ 0xFFFF ):
+            logging.error( 'TAGS CRC16 is ERROR.')
+            return ''
+        
+        error  = ( True if value[-3] == ImpinjR2KGlobalErrors.SUCCESS else False, ImpinjR2KGlobalErrors.to_string( value[-3] ) )
+        ant    = ( value[-2] & 0x03 ) + 1
+        wcount = value[-1]
+
+        logging.debug( '*'*50 )
+        logging.debug( 'COUNT      : {}'.format( count ) )
+        logging.debug( 'EPC        : {}'.format( epc   ) )
+        logging.debug( 'CRC        : {:X}'.format( crc ) )
+        logging.debug( 'ERROR      : {}'.format( error ) )
+        logging.debug( 'ANT        : {}'.format( ant   ) )
+        logging.debug( 'WriteCount : {}'.format( wcount) )
+
+        return epc

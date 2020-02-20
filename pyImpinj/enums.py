@@ -125,7 +125,6 @@ class ImpinjR2KGlobalErrors( object ):
 
     @classmethod
     def to_string( cls, error_code ):
-        logging.debug( 'ERROR CODE : 0x{:02X}'.format( error_code ) )
         if error_code == cls.MCU_RESET_ERROR:
             return 'MCU reset error.'
         elif error_code == cls.WRITE_FLASH_ERROR:

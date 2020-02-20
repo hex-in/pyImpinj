@@ -201,31 +201,29 @@ class ImpinjR2KProtocols( object ):
         pass
 
     @register( ImpinjR2KCommands.READ )
-    def read( self, bank='EPC', addr=2, size=8, password=[ 0 ]*4 ):
+    def read( self, bank='EPC', addr=0, size=2, password=[ 0 ]*4 ):
         body = []
-        body.append( TAG_MEMORY_BANK.get( bank, 1 ) )
-        body.append( addr )
-        body.extend( list( struct.pack( '>H', size ) ) )
+        body.extend( [ TAG_MEMORY_BANK.get( bank, 1 ), addr, size ] )
         body.extend( password )
         return body
 
     @register( ImpinjR2KCommands.WRITE )
-    def write( self, data:list, bank='EPC', addr=2, password=[ 0 ]*4 ):
+    def write( self, data:list, bank='EPC', addr=0, password=[ 0 ]*4 ):
         body = []
         body.extend( password )
         body.append( TAG_MEMORY_BANK.get( bank, 1 ) )
-        body.append( addr )
-        body.extend( list( struct.pack( '>H', len(data)//2 ) ) )
+        body.append( 2 if ( (bank == 'EPC') and (addr == 0) ) else addr )
+        body.append( len(data)//2  )
         body.extend( data )
         return body
 
     @register( ImpinjR2KCommands.WRITE_BLOCK )
-    def write_block( self, data:list, bank='EPC', addr=2, password=[ 0 ]*4 ):
+    def write_block( self, data:list, bank='EPC', addr=0, password=[ 0 ]*4 ):
         body = []
         body.extend( password )
         body.append( TAG_MEMORY_BANK.get( bank, 1 ) )
-        body.append( addr )
-        body.extend( list( struct.pack( '>H', len(data)//2 ) ) )
+        body.append( 2 if ( (bank == 'EPC') and (addr == 0) ) else addr )
+        body.append( len(data)//2 )
         body.extend( data )
         return body
 
