@@ -14,18 +14,18 @@ from codecs import open
 
 here = path.abspath(path.dirname(__file__))
 
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
     long_description = long_description.replace('\r', '')
 
 setup(
-    name='pyImpinjR2K',
-    version='1.0',
+    name='pyImpinj',
+    version='1.1',
 
     description='Library for Impinj R2000 Reader',
     long_description=long_description,
 
-    url='',
+    url='https://github.com/hex-in/pyImpinj',
     author='Heyn',
     author_email='heyunhuan@gmail.com',
 
@@ -45,6 +45,8 @@ setup(
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
     ],
+
+    include_package_data=True,
 
     keywords=['Impinj', 'R2000'],
     packages=['pyImpinj'],

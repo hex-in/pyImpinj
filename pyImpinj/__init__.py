@@ -11,7 +11,7 @@
 #           2020-02-20 Ver:1.1 [Heyn] New add read & write function.
 
 __author__    = 'Heyn'
-__version__   = '1.0'
+__version__   = '1.1'
 
 import os
 import queue
@@ -73,7 +73,12 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
                         ImpinjR2KCommands.ISO18000_6B_INVENTORY,
                         ImpinjR2KCommands.FAST_SWITCH_ANT_INVENTORY,
                         ImpinjR2KCommands.CUSTOMIZED_SESSION_TARGET_INVENTORY ]:
-            antenna   = ( ( message[0] & 0x03 ) + 1  )
+
+            if len( message ) <= 1:
+                self.package_queue.put( dict( type='ERROR', logs=ImpinjR2KGlobalErrors.to_string( message[0] ) ) )
+                return
+
+            antenna   = ( message[0] & 0x03 ) + 1
             frequency = FREQUENCY_TABLES[ ( ( ( message[0] & 0xFC ) >> 2 ) & 0x3F ) ]
 
             try:
@@ -101,17 +106,18 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
 
 class ImpinjR2KReader( object ):
 
-    def analyze_data( method='RESULT' ):
+    def analyze_data( method='RESULT', timeout=3 ):
         def decorator( func ):
             def wrapper( self, *args, **kwargs ):
                 func( self, *args, **kwargs )
                 try:
-                    data = self.command_queue.get( timeout=3 )
+                    data = self.command_queue.get( timeout=timeout )
                     if method == 'DATA':
                         return data['data']
                     else:
                         return ( True if data['data'][0] == ImpinjR2KGlobalErrors.SUCCESS else False, ImpinjR2KGlobalErrors.to_string( data['data'][0] ) )
                 except BaseException as err:
+                    logging.error( '[ERROR] ANALYZE_DATA {}'.format( err ) )
                     return str( err )
             return wrapper
         return decorator
@@ -306,7 +312,7 @@ class ImpinjR2KReader( object ):
         self.protocol.reset_inventory_buffer()
 
     #-------------------------------------------------
-    @analyze_data()
+    @analyze_data( timeout=5 )
     def set_access_epc_match( self, mode=0, epc='00'*12 ):
         self.protocol.set_access_epc_match( mode=mode, epc=list( bytearray.fromhex( epc ) ) )
 
@@ -314,15 +320,14 @@ class ImpinjR2KReader( object ):
         """
             EPC  -> address=0, size=8
             TID  -> address=0, size=3
-            USER -> address=0, size=4
+            USER -> address=0, size=2
         """
         result = self.set_access_epc_match( mode=0, epc=epc )
-        if not result[0]:
-            logging.error( result[1] )
+        if ( len(result) == 0) or (not result[0] ):
             return ''
 
         self.protocol.read( bank=bank, addr=address, size=size, password=password )
-        value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+        value = ImpinjR2KReader.analyze_data( 'DATA', timeout=5 )( lambda x, y : y )( self, None )
 
         try:
             count, length = struct.unpack( '>HB', value[0:3] )
@@ -359,21 +364,18 @@ class ImpinjR2KReader( object ):
         logging.debug( 'ANT      : {}'.format( antenna   ) )
         logging.debug( 'INVCOUNT : {}'.format( invcount  ) )
 
-        logging.info( 'READ: {}'.format( data ) )
-
         return data
 
     def write( self, epc:str, data:str, bank='EPC', address=0, password=[ 0 ]*4 ):
         """ Write Tag to ( EPC, TID, USER )
             EPC  -> address=2, size=8
             TID  -> address=0, size=3
-            USER -> address=0, size=4
+            USER -> address=0, size=2
         """
         assert( type( epc ) is str ) and ( type( data ) is str )
 
         result = self.set_access_epc_match( mode=0, epc=epc )
-        if not result[0]:
-            logging.error( result[1] )
+        if ( len(result) == 0) or (not result[0] ):
             return ''
 
         try:

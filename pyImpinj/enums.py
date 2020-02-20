@@ -130,7 +130,13 @@ class ImpinjR2KGlobalErrors( object ):
         elif error_code == cls.WRITE_FLASH_ERROR:
             return 'Write flash error.'
         
-        ### Tags ERRORS
+        ### 0x2*
+        elif error_code == cls.ANTENNA_MISSING_ERROR:
+            return 'Antenna miss error.'
+        elif error_code == cls.SET_OUTPUT_POWER_ERROR:
+            return 'Set output power error.'
+
+        ### 0x3*
         elif error_code == cls.TAG_INVENTORY_ERROR:
             return 'Tag inventory error'
         elif error_code == cls.TAG_READ_ERROR:

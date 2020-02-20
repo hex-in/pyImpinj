@@ -35,8 +35,8 @@ Example
     print( TAG_QUEUE.get( ) )
     
 
-V1.0 (2020-02-18)
+V1.1 (2020-02-20)
 -------
 
-* Release ver1.0
+* Release ver1.1
 

@@ -250,7 +250,6 @@ class ImpinjR2KProtocols( object ):
 
     @register( ImpinjR2KCommands.SET_ACCESS_EPC_MATCH )
     def set_access_epc_match( self, mode, epc:list ):
-        ### TODO epc = 646C8D8A97F0000030000001
         assert( mode in ( 0, 1 ) )
         body = [ mode, len(epc) ]
         body.extend( epc )
