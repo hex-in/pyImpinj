@@ -8,7 +8,7 @@
 # Package:  None.
 # Drivers:  None.
 # History:  2020-02-18 Ver:1.0 [Heyn] Initialization
-#           2020-02-20 Ver:1.1 [Heyn] New add read & write function.
+#           2020-02-20 Ver:1.1 [Heyn] New add read & write & get_rf_port_return_loss function.
 
 __author__    = 'Heyn'
 __version__   = '1.1'
@@ -66,14 +66,12 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
         except BaseException as err:
             logging.error( err )
             return
-        
         ### Tags 
         if command in [ 
                         ImpinjR2KCommands.REAL_TIME_INVENTORY,
                         ImpinjR2KCommands.ISO18000_6B_INVENTORY,
                         ImpinjR2KCommands.FAST_SWITCH_ANT_INVENTORY,
                         ImpinjR2KCommands.CUSTOMIZED_SESSION_TARGET_INVENTORY ]:
-
             if len( message ) <= 1:
                 self.package_queue.put( dict( type='ERROR', logs=ImpinjR2KGlobalErrors.to_string( message[0] ) ) )
                 return
@@ -90,7 +88,9 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
 
             size = ( ( pc & 0xF800 ) >> 10 ) & 0x003E
             if size == 0:
+                self.package_queue.put( dict( type='ERROR', logs='Nothing!' ) )
                 return
+
             rssi = message[-1] - 129
             epc  = ''.join( [ '%02X' % x for x in message[3:-1] ] )
             self.package_queue.put( dict( type='TAG',
@@ -106,7 +106,7 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
 
 class ImpinjR2KReader( object ):
 
-    def analyze_data( method='RESULT', timeout=3 ):
+    def analyze_data( method='RESULT', timeout=1 ):
         def decorator( func ):
             def wrapper( self, *args, **kwargs ):
                 func( self, *args, **kwargs )
@@ -117,7 +117,7 @@ class ImpinjR2KReader( object ):
                     else:
                         return ( True if data['data'][0] == ImpinjR2KGlobalErrors.SUCCESS else False, ImpinjR2KGlobalErrors.to_string( data['data'][0] ) )
                 except BaseException as err:
-                    logging.error( '[ERROR] ANALYZE_DATA {}'.format( err ) )
+                    logging.error( '[ERROR] ANALYZE_DATA {}'.format( str(err) ) )
                     return str( err )
             return wrapper
         return decorator
@@ -197,6 +197,22 @@ class ImpinjR2KReader( object ):
     @analyze_data( 'DATA' )
     def get_work_antenna( self ):
         self.protocol.get_work_antenna( )
+
+    @analyze_data( )
+    def set_ant_connection_detector( self, loss=0 ):
+        self.protocol.set_ant_connection_detector( loss=loss )
+
+    @analyze_data( 'DATA' )
+    def get_ant_connection_detector( self ):
+        self.protocol.get_ant_connection_detector( )
+
+    def get_rf_port_return_loss( self ):
+        self.protocol.get_rf_port_return_loss( )
+        value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+        if value[0] == 0xEE:
+            logging.error( 'Get rf port return loss fail.' )
+            return 0xFF
+        return value[0]
 
     def rt_inventory( self, repeat=1 ):
         self.protocol.rt_inventory( repeat=repeat )

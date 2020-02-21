@@ -32,6 +32,9 @@ def main( ):
 
     R2000.worker_start()
     R2000.fast_power( 22 )
+    # print( R2000.get_rf_port_return_loss() )
+    # print( R2000.get_ant_connection_detector() )
+    # print( R2000.set_ant_connection_detector( 10 ) )
 
     antenna_array = [ READER_ANTENNA['ANTENNA1'],
                       READER_ANTENNA['ANTENNA2'],
@@ -40,22 +43,28 @@ def main( ):
     index = 0
     while True:
         try:
-            data = TAG_QUEUE.get( timeout=0.5 )
+            data = TAG_QUEUE.get( timeout=0.1 )
         except BaseException:
             print( R2000.set_work_antenna( antenna_array[index] ) )
+            # time.sleep( 0.1 )
+            R2000.rt_inventory( repeat=10 )
+            # time.sleep( 0.5 )
+            # R2000.fast_switch_ant_inventory( param = dict( A=ImpinjR2KFastSwitchInventory.ANTENNA1, Aloop=1,
+            #                                                B=ImpinjR2KFastSwitchInventory.ANTENNA4, Bloop=1,
+            #                                                C=ImpinjR2KFastSwitchInventory.DISABLED, Cloop=1,
+            #                                                D=ImpinjR2KFastSwitchInventory.DISABLED, Dloop=1,
+            #                                                Interval = 0,
+            #                                                Repeat   = 1 ) )
             
-            R2000.rt_inventory( repeat=5 )
-
-            R2000.fast_switch_ant_inventory( param = dict( A=ImpinjR2KFastSwitchInventory.ANTENNA1, Aloop=1,
-                                                           B=ImpinjR2KFastSwitchInventory.ANTENNA4, Bloop=1,
-                                                           C=ImpinjR2KFastSwitchInventory.DISABLED, Cloop=1,
-                                                           D=ImpinjR2KFastSwitchInventory.DISABLED, Dloop=1,
-                                                           Interval = 0,
-                                                           Repeat   = 1 ) )
-
             index = index + 1
             index = 0 if index >= len( antenna_array ) else index
             continue
+
+        if data['type'] == 'ERROR':
+            index = index + 1
+            index = 0 if index >= len( antenna_array ) else index
+            print( R2000.set_work_antenna( antenna_array[index] ) )
+            R2000.rt_inventory( repeat=10 )
 
         print( data )
 

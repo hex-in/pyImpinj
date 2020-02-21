@@ -9,6 +9,7 @@
 # Drivers:  None.
 # History:  2020-02-17 Ver:1.0 [Heyn] Initialization
 #           2020-02-19 Ver:1.1 [Heyn] New add some functions.
+#           2020-02-20 Ver:1.1 [Heyn] New add get_rf_port_return_loss function.
 
 import struct
 import libscrc
@@ -257,6 +258,10 @@ class ImpinjR2KProtocols( object ):
 
     @register( ImpinjR2KCommands.GET_ACCESS_EPC_MATCH )
     def get_access_epc_match( self ):
+        pass
+
+    @register( ImpinjR2KCommands.GET_RF_PORT_RETURN_LOSS )
+    def get_rf_port_return_loss( self ):
         pass
 
     @register( ImpinjR2KCommands.ISO18000_6B_INVENTORY )
