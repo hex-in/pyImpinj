@@ -5,10 +5,12 @@
 # Platform: Windows/Linux/MacOS
 # Author:   Heyn (heyunhuan@gmail.com)
 # Program:  Library for Impinj R2000 module.
-# Package:  None.
+# Package:  pip3 install liscrc
+#           pip3 install pyserial
 # Drivers:  None.
 # History:  2020-02-18 Ver:1.0 [Heyn] Initialization
 #           2020-02-20 Ver:1.1 [Heyn] New add read & write & get_rf_port_return_loss function.
+#           2020-02-24 Ver:1.1 [Heyn] Bugfix:20200224
 
 __author__    = 'Heyn'
 __version__   = '1.1'
@@ -31,10 +33,11 @@ from .constant import FREQUENCY_TABLES, READER_ANTENNA
 
 class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
     START = b'\xA0'
-    def __init__( self, package_queue, command_queue ):
+    def __init__( self, package_queue, command_queue, address=0xFF ):
         self.packet = bytearray()
         self.in_packet = False
         self.transport = None
+        self.address   = address
         self.package_queue = package_queue
         self.command_queue = command_queue
         super( ImpinjProtocolFactory, self ).__init__( )
@@ -56,24 +59,41 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
 
                 if ( ( self.packet[1] + 2 ) == len( self.packet ) ):
                     self.in_packet = False
-                    if ( libscrc.lrc( bytes(self.packet) ) == 0 ):
-                        self.handle_packet( bytes( self.packet ) )
-                    del self.packet[:]
+                    if self.address == self.packet[2]:                  # Check if the address is correct.
+                        if ( libscrc.lrc( bytes(self.packet) ) == 0 ):  # Check if the package's crc is correct.
+                            self.handle_packet( bytes( self.packet ) )  # Process data.
+                    del self.packet[:]                                  # Clear buffer.
 
     def handle_packet( self, packet ):
         try:
-            command, message = packet[3], packet[4:-1]
+            length, command, message = packet[1], packet[3], packet[4:-1]
         except BaseException as err:
             logging.error( err )
             return
         ### Tags 
-        if command in [ 
-                        ImpinjR2KCommands.REAL_TIME_INVENTORY,
-                        ImpinjR2KCommands.ISO18000_6B_INVENTORY,
-                        ImpinjR2KCommands.FAST_SWITCH_ANT_INVENTORY,
-                        ImpinjR2KCommands.CUSTOMIZED_SESSION_TARGET_INVENTORY ]:
+        if command in [ ImpinjR2KCommands.REAL_TIME_INVENTORY, ImpinjR2KCommands.ISO18000_6B_INVENTORY,
+                        ImpinjR2KCommands.FAST_SWITCH_ANT_INVENTORY, ImpinjR2KCommands.CUSTOMIZED_SESSION_TARGET_INVENTORY ]:
+            
             if len( message ) <= 1:
                 self.package_queue.put( dict( type='ERROR', logs=ImpinjR2KGlobalErrors.to_string( message[0] ) ) )
+                return
+            
+            ### Special process.
+            if length == 0x0A:        # Operation successful.
+                if command in [ ImpinjR2KCommands.REAL_TIME_INVENTORY, ImpinjR2KCommands.CUSTOMIZED_SESSION_TARGET_INVENTORY ]:
+                     ### Head -- Length(fix=0x0A) -- Address -- Cmd -- AntID(1B) -- ReadRate(2B) -- TotalRead(4B) -- Check
+                    duration   = struct.unpack( '>H', message[1:3] )[0]
+                    total_read = struct.unpack( '>I', message[3:7] )[0]
+                else:
+                     ### Head -- Length(fix=0x0A) -- Address -- Cmd -- TotalRead(3B) -- CommandDuration(4B) -- Check
+                    total_read = ((message[0]<<16) & 0x00FF0000) + ((message[1]<<8)& 0x0000FF00) + message[2]
+                    duration   = struct.unpack( '>I', message[3:7] )[0]
+                self.package_queue.put( dict( type='DONE', total_read=total_read, duration=duration ) )
+                return
+
+            elif length == 0x04:      # Operation failed.
+                ### Head -- Length(fix=0x04) -- Address -- Cmd -- ErrorCode -- Check
+                self.package_queue.put( dict( type='ERROR', logs='{}'.format( ImpinjR2KGlobalErrors.to_string( message[0] ) ) ) )
                 return
 
             antenna   = ( message[0] & 0x03 ) + 1
@@ -92,7 +112,7 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
                 return
 
             rssi = message[-1] - 129
-            epc  = ''.join( [ '%02X' % x for x in message[3:-1] ] )
+            epc  = ''.join( [ '%02X' % x for x in message[3:size+3] ] )     # Bugfix:20200224
             self.package_queue.put( dict( type='TAG',
                                           antenna=antenna,
                                           frequency=frequency, rssi=rssi, epc=epc ) )
@@ -117,7 +137,7 @@ class ImpinjR2KReader( object ):
                     else:
                         return ( True if data['data'][0] == ImpinjR2KGlobalErrors.SUCCESS else False, ImpinjR2KGlobalErrors.to_string( data['data'][0] ) )
                 except BaseException as err:
-                    logging.error( '[ERROR] ANALYZE_DATA {}'.format( str(err) ) )
+                    logging.debug( '[ERROR] ANALYZE_DATA {}'.format( str(err) ) )
                     return str( err )
             return wrapper
         return decorator
@@ -158,7 +178,7 @@ class ImpinjR2KReader( object ):
         return True
 
     def worker_start( self ):
-        self.protocol_factory = ImpinjProtocolFactory( self.package_queue, self.command_queue )
+        self.protocol_factory = ImpinjProtocolFactory( self.package_queue, self.command_queue, self.address )
         self.serial_worker = serial.threaded.ReaderThread( self.ser, self.protocol_factory )
         self.serial_worker.start( )
 
@@ -280,7 +300,12 @@ class ImpinjR2KReader( object ):
         return count
 
     def __unpack_inventory_buffer( self, data ):
-        count, length = struct.unpack( '>HB', data[0:3] )
+        try:
+            count, length = struct.unpack( '>HB', data[0:3] )
+        except BaseException:
+            print( data )
+            return ''
+
         if (length + 6) != len( data ):
             return ''
 

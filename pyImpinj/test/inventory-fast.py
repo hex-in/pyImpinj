@@ -4,7 +4,7 @@
 # Python:   3.6.5+
 # Platform: Windows/Linux/MacOS
 # Author:   Heyn (heyunhuan@gmail.com)
-# Program:  Test script( Inventory ).
+# Program:  Test script.(Fast inventory)
 # Package:  pip3 install pyImpinj.
 # Drivers:  None.
 # History:  2020-02-25 Ver:1.0 [Heyn] Initialization
@@ -18,7 +18,7 @@ from pyImpinj import ImpinjR2KReader
 from pyImpinj.constant import READER_ANTENNA
 from pyImpinj.enums    import ImpinjR2KFastSwitchInventory
 
-logging.basicConfig( level=logging.ERROR )
+logging.basicConfig( level=logging.INFO )
 
 def main( ):
     TAG_QUEUE = queue.Queue( 1024 )
@@ -36,25 +36,18 @@ def main( ):
     # print( R2000.get_ant_connection_detector() )
     # print( R2000.set_ant_connection_detector( 10 ) )
 
-    antenna_array = [ READER_ANTENNA['ANTENNA1'],
-                      READER_ANTENNA['ANTENNA2'],
-                      READER_ANTENNA['ANTENNA3'],
-                      READER_ANTENNA['ANTENNA4'] ]
-
-    # R2000.set_work_antenna( READER_ANTENNA['ANTENNA4'] )
-
-    MAX_TAGS = 9
-
     while True:
-        for index in range( READER_ANTENNA['MAX'] ):
-            R2000.set_work_antenna( antenna_array[index] )
-            count = R2000.inventory( repeat=0xFF )
-            if count == MAX_TAGS:
-                break
-        if count == 0:
+        try:
+            data = TAG_QUEUE.get( timeout=0.1 )
+        except BaseException:
+            R2000.fast_switch_ant_inventory( param = dict( A=ImpinjR2KFastSwitchInventory.ANTENNA1, Aloop=1,
+                                                           B=ImpinjR2KFastSwitchInventory.ANTENNA2, Bloop=1,
+                                                           C=ImpinjR2KFastSwitchInventory.ANTENNA3, Cloop=1,
+                                                           D=ImpinjR2KFastSwitchInventory.ANTENNA4, Dloop=1,
+                                                           Interval = 0,
+                                                           Repeat   = 1 ) )
             continue
-        time.sleep( 0.1 )
-        print( R2000.get_and_reset_inventory_buffer( count ) )
+        print( data )
 
 if __name__ == "__main__":
     main()

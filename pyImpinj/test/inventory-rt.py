@@ -4,7 +4,7 @@
 # Python:   3.6.5+
 # Platform: Windows/Linux/MacOS
 # Author:   Heyn (heyunhuan@gmail.com)
-# Program:  Test script( Inventory ).
+# Program:  Test script (Realtime inventory).
 # Package:  pip3 install pyImpinj.
 # Drivers:  None.
 # History:  2020-02-25 Ver:1.0 [Heyn] Initialization
@@ -18,7 +18,7 @@ from pyImpinj import ImpinjR2KReader
 from pyImpinj.constant import READER_ANTENNA
 from pyImpinj.enums    import ImpinjR2KFastSwitchInventory
 
-logging.basicConfig( level=logging.ERROR )
+logging.basicConfig( level=logging.INFO )
 
 def main( ):
     TAG_QUEUE = queue.Queue( 1024 )
@@ -40,21 +40,21 @@ def main( ):
                       READER_ANTENNA['ANTENNA2'],
                       READER_ANTENNA['ANTENNA3'],
                       READER_ANTENNA['ANTENNA4'] ]
-
-    # R2000.set_work_antenna( READER_ANTENNA['ANTENNA4'] )
-
-    MAX_TAGS = 9
-
+    index = 0
+    R2000.set_work_antenna( READER_ANTENNA['ANTENNA4'] )
     while True:
-        for index in range( READER_ANTENNA['MAX'] ):
-            R2000.set_work_antenna( antenna_array[index] )
-            count = R2000.inventory( repeat=0xFF )
-            if count == MAX_TAGS:
-                break
-        if count == 0:
+        try:
+            data = TAG_QUEUE.get( timeout=0.1 )
+        except BaseException:
+            R2000.rt_inventory( repeat=10 )
             continue
-        time.sleep( 0.1 )
-        print( R2000.get_and_reset_inventory_buffer( count ) )
+
+        if data['type'] == 'DONE':
+            index = index + 1
+            index = 0 if index >= len( antenna_array ) else index
+            print( R2000.set_work_antenna( antenna_array[index] ) )
+
+        print( data )
 
 if __name__ == "__main__":
     main()
