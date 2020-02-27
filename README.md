@@ -14,7 +14,7 @@ Installation
 Usage
 -----
 
-    ### In Python 3
+* In Python 3
   
     from pyImpinj import ImpinjR2KReader
   
@@ -34,6 +34,14 @@ Example
     
     print( TAG_QUEUE.get( ) )
     
+V1.2 (2020-02-27)
+-------
+
+* Release ver1.2
+
+    New add get(set)_frequency_region  
+    New add set_frequency_region_user  
+    New add test/auto_config.py
 
 V1.1 (2020-02-20)
 -------

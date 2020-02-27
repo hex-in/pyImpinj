@@ -11,9 +11,10 @@
 # History:  2020-02-18 Ver:1.0 [Heyn] Initialization
 #           2020-02-20 Ver:1.1 [Heyn] New add read & write & get_rf_port_return_loss function.
 #           2020-02-24 Ver:1.1 [Heyn] Bugfix:20200224
+#           2020-02-27 Ver:1.2 [Heyn] New add get(set)_frequency_region
 
 __author__    = 'Heyn'
-__version__   = '1.1'
+__version__   = '1.2'
 
 import os
 import queue
@@ -24,6 +25,7 @@ import logging
 import serial.threaded
 import serial.tools.list_ports
 
+from .enums    import ImpinjR2KRegion
 from .enums    import ImpinjR2KCommands
 from .enums    import ImpinjR2KGlobalErrors
 from .enums    import ImpinjR2KFastSwitchInventory
@@ -226,12 +228,19 @@ class ImpinjR2KReader( object ):
     def get_ant_connection_detector( self ):
         self.protocol.get_ant_connection_detector( )
 
-    def get_rf_port_return_loss( self ):
-        self.protocol.get_rf_port_return_loss( )
+    def get_rf_port_return_loss( self, freq=FREQUENCY_TABLES[0] ):
+        try:
+            param = FREQUENCY_TABLES.index( freq )
+        except ValueError as err:
+            logging.error( err )
+            logging.error( FREQUENCY_TABLES )
+            raise err
+
+        self.protocol.get_rf_port_return_loss( param=param )
         value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
         if value[0] == 0xEE:
             logging.error( 'Get rf port return loss fail.' )
-            return 0xFF
+            return 0
         return value[0]
 
     def rt_inventory( self, repeat=1 ):
@@ -461,3 +470,44 @@ class ImpinjR2KReader( object ):
         logging.debug( 'WriteCount : {}'.format( wcount) )
 
         return epc
+
+    #-------------------------------------------------
+    @analyze_data( )
+    def set_frequency_region_user( self, start_khz, space_khz, quantity ):
+        self.protocol.set_frequency_region_user( start=start_khz, space=space_khz, quantity=quantity )
+
+    @analyze_data( )
+    def set_frequency_region( self, start, stop, region=ImpinjR2KRegion.FCC ):
+        """
+        """
+        assert ( FREQUENCY_TABLES[0] <= stop  <= FREQUENCY_TABLES[-1] ), 'SEE: constant.FREQUENCY_TABLES'
+        assert ( FREQUENCY_TABLES[0] <= start <= FREQUENCY_TABLES[-1] ), 'SEE: constant.FREQUENCY_TABLES'
+        assert ( start <= stop )
+
+        try:
+            start = FREQUENCY_TABLES.index( start )
+            stop  = FREQUENCY_TABLES.index( stop  )
+        except ValueError as err:
+            logging.error( err )
+            logging.error( FREQUENCY_TABLES )
+            raise err
+
+        self.protocol.set_frequency_region( region=region, start=start, stop=stop )
+
+    def get_frequency_region( self ):
+        self.protocol.get_frequency_region( )
+        value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+        
+        REGION = { 0:'ERROR', 1:'FCC', 2:'ETSI', 3:'CHN', 4:'USER' }
+
+        logging.debug( 'Region : {}'.format( REGION.get( value[0], 'ERRROR' ) ) )
+        if value[0] != ImpinjR2KRegion.USER:
+            return dict( Region    = REGION.get( value[0], 'ERRROR' ),
+                         StartFreq = FREQUENCY_TABLES[ value[1] ],
+                         EndFreq   = FREQUENCY_TABLES[ value[2] ] )
+        
+        StartFreq = ((value[3]<<16) & 0x00FF0000) + ((value[4]<<8)& 0x0000FF00) + value[5]
+        return dict( Region    = REGION.get( value[0], 'ERRROR' ),
+                     FreqSpace = value[1] // 10,
+                     Quantity  = value[2],
+                     StartFreq = StartFreq )

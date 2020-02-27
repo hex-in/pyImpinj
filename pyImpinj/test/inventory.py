@@ -44,15 +44,16 @@ def main( ):
     # R2000.set_work_antenna( READER_ANTENNA['ANTENNA4'] )
 
     MAX_TAGS = 9
-
+    R2000.set_work_antenna( READER_ANTENNA['ANTENNA4'] )
     while True:
-        for index in range( READER_ANTENNA['MAX'] ):
-            R2000.set_work_antenna( antenna_array[index] )
-            count = R2000.inventory( repeat=0xFF )
-            if count == MAX_TAGS:
-                break
-        if count == 0:
-            continue
+        # for index in [ READER_ANTENNA['ANTENNA1'], READER_ANTENNA['ANTENNA4'] ]:
+        #     R2000.set_work_antenna( antenna_array[index] )
+        # for _ in range( 10 ):
+        count = R2000.inventory( repeat=0xFF )
+        #     if count == MAX_TAGS:
+        #         break
+        # if count == 0:
+        #     continue
         time.sleep( 0.1 )
         print( R2000.get_and_reset_inventory_buffer( count ) )
 

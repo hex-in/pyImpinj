@@ -20,7 +20,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='pyImpinj',
-    version='1.1',
+    version='1.2',
 
     description='Library for Impinj R2000 Reader',
     long_description=long_description,

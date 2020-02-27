@@ -10,11 +10,13 @@
 # History:  2020-02-17 Ver:1.0 [Heyn] Initialization
 #           2020-02-19 Ver:1.1 [Heyn] New add some functions.
 #           2020-02-20 Ver:1.1 [Heyn] New add get_rf_port_return_loss function.
+#           2020-02-27 Ver:1.2 [Heyn] New add get(set)_frequency_region and get(set)_rf_link_profile
 
 import struct
 import libscrc
 import logging
 
+from .enums import ImpinjR2KRegion
 from .enums import ImpinjR2KCommands
 from .enums import ImpinjR2KFastSwitchInventory
 
@@ -261,7 +263,37 @@ class ImpinjR2KProtocols( object ):
         pass
 
     @register( ImpinjR2KCommands.GET_RF_PORT_RETURN_LOSS )
-    def get_rf_port_return_loss( self ):
+    def get_rf_port_return_loss( self, param ):
+        return [ param ]
+
+    @register( ImpinjR2KCommands.SET_FREQUENCY_REGION )
+    def set_frequency_region( self, region, start, stop ):
+        return [ region, start, stop ]
+
+    @register( ImpinjR2KCommands.GET_FREQUENCY_REGION )
+    def get_frequency_region( self ):
+        pass
+
+    @register( ImpinjR2KCommands.SET_FREQUENCY_REGION )
+    def set_frequency_region_user( self, start, space, quantity ):
+        """
+            start : e.g. 915000KHz --> 0D F6 38 (unit KHz)
+            space : space*10 (unit KHz)
+            quantity : must be above 0
+        """
+        assert( quantity > 0 )
+        body = [ ImpinjR2KRegion.USER, space*10, quantity ]
+        body.append( ( ( start & 0x00FF0000 ) >> 16 ) & 0x000000FF )
+        body.append( ( ( start & 0x0000FF00 ) >>  8 ) & 0x000000FF )
+        body.append( ( ( start & 0x000000FF ) >>  0 ) & 0x000000FF )
+        return body
+
+    @register( ImpinjR2KCommands.SET_RF_LINK_PROFILE )
+    def set_rf_link_profile( self, profile_id ):
+        return [ profile_id ]
+
+    @register( ImpinjR2KCommands.GET_RF_LINK_PROFILE )
+    def get_rf_link_profile( self ):
         pass
 
     @register( ImpinjR2KCommands.ISO18000_6B_INVENTORY )
