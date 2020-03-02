@@ -29,7 +29,7 @@ setup(
     author='Heyn',
     author_email='heyunhuan@gmail.com',
 
-    license='GPLv3',
+    license='MIT',
     platforms='any',
 
     classifiers=[
