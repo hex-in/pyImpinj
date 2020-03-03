@@ -12,6 +12,7 @@
 #           2020-02-20 Ver:1.1 [Heyn] New add read & write & get_rf_port_return_loss function.
 #           2020-02-24 Ver:1.1 [Heyn] Bugfix:20200224
 #           2020-02-27 Ver:1.2 [Heyn] New add get(set)_frequency_region
+#           2020-03-02 Ver:1.2 [Heyn] Bugfix:20200302 The last message was not processed.
 
 __author__    = 'Heyn'
 __version__   = '1.2'
@@ -70,7 +71,7 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
         try:
             length, command, message = packet[1], packet[3], packet[4:-1]
         except BaseException as err:
-            logging.error( err )
+            logging.error( '[ERROR] ImpinjProtocolFactory.handle_packet : {}'.format( err ) )
             return
         ### Tags 
         if command in [ ImpinjR2KCommands.REAL_TIME_INVENTORY, ImpinjR2KCommands.ISO18000_6B_INVENTORY,
@@ -128,7 +129,7 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
 
 class ImpinjR2KReader( object ):
 
-    def analyze_data( method='RESULT', timeout=1 ):
+    def analyze_data( method='RESULT', timeout=3 ):
         def decorator( func ):
             def wrapper( self, *args, **kwargs ):
                 func( self, *args, **kwargs )
@@ -139,7 +140,7 @@ class ImpinjR2KReader( object ):
                     else:
                         return ( True if data['data'][0] == ImpinjR2KGlobalErrors.SUCCESS else False, ImpinjR2KGlobalErrors.to_string( data['data'][0] ) )
                 except BaseException as err:
-                    logging.debug( '[ERROR] ANALYZE_DATA {}'.format( str(err) ) )
+                    logging.debug( '[ERROR] ANALYZE_DATA error {} or COMMAND QUEUE is timeout.'.format( str(err) ) )
                     return str( err )
             return wrapper
         return decorator
@@ -290,11 +291,14 @@ class ImpinjR2KReader( object ):
     #-------------------------------------------------
     def inventory( self, repeat=0xFF ):
         self.protocol.inventory( repeat=repeat )
-        value  = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+        value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
         try:
             antenna, tagcount, read_rate, read_total = struct.unpack( '>BHHI', value )
-        except BaseException:
+        except BaseException as err:
+            logging.error( err )
+            logging.error( 'INVENTORY VALUE = {}'.format( value ) )
             return 0
+
         logging.info( 'Antenna ID : {}'.format( antenna + 1 ) )
         logging.info( 'Tag count  : {}'.format( tagcount    ) )
         logging.info( 'Read rate  : {}/s'.format( read_rate   ) )
@@ -311,8 +315,8 @@ class ImpinjR2KReader( object ):
     def __unpack_inventory_buffer( self, data ):
         try:
             count, length = struct.unpack( '>HB', data[0:3] )
-        except BaseException:
-            print( data )
+        except BaseException as err:
+            logging.error( err )
             return ''
 
         if (length + 6) != len( data ):
@@ -347,6 +351,10 @@ class ImpinjR2KReader( object ):
         for _ in range( loop ):
             value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
             epc.append( self.__unpack_inventory_buffer( value ) )
+        # ### Bugfix:20200302
+        # value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+        # print(value)
+        # logging.info( 'GET_AND_RESET_INVENTORY_BUFFER = {}'.format( ImpinjR2KGlobalErrors.to_string( value[0] ) ) )
         return epc
 
     def get_and_reset_inventory_buffer( self, loop=1 ):
@@ -355,6 +363,9 @@ class ImpinjR2KReader( object ):
         for _ in range( loop ):
             value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
             epc.append( self.__unpack_inventory_buffer( value ) )
+        ### Bugfix:20200302
+        value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+        logging.info( 'GET_AND_RESET_INVENTORY_BUFFER = {}'.format( ImpinjR2KGlobalErrors.to_string( value[0] ) ) )
         return epc
     
     @analyze_data( )
