@@ -9,6 +9,7 @@
 # Drivers:  None.
 # History:  2020-02-18 Ver:1.0 [Heyn] Initialization.
 #           2020-02-27 Ver:1.2 [Heyn] New add ImpinjR2KRegion and ImpinjR2KRFLinkProfile.
+#           2020-03-03 Ver:1.2 Encoding UTF-8
 
 import logging
 
@@ -171,7 +172,7 @@ class ImpinjR2KRegion( object ):
     USER = 4
 
 class ImpinjR2KRFLinkProfile( object ):
-    PROFILE0 = 0xD0 # Tari 25uS，FM0 40KHz
-    PROFILE1 = 0xD1 # Tari 25uS，Miller 4 250KHz ( Default )
-    PROFILE2 = 0xD2 # Tari 25uS，Miller 4 300KHz
-    PROFILE3 = 0xD3 # Tari 6.25uS，FM0 400KHz
+    PROFILE0 = 0xD0 # Tari 25uS,FM0 40KHz
+    PROFILE1 = 0xD1 # Tari 25uS,Miller 4 250KHz ( Default )
+    PROFILE2 = 0xD2 # Tari 25uS,Miller 4 300KHz
+    PROFILE3 = 0xD3 # Tari 6.25uS,FM0 400KHz

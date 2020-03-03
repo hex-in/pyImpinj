@@ -51,6 +51,6 @@ setup(
     keywords=['Impinj', 'R2000'],
     packages=['pyImpinj'],
 
-    install_requires=[ 'pyserial >= 3.4', 'libscrc == 0.1.6' ],
+    install_requires=[ 'pyserial == 3.4', 'libscrc == 0.1.6' ],
 
 )

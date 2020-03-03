@@ -5,14 +5,14 @@
 # Platform: Windows/Linux/MacOS
 # Author:   Heyn (heyunhuan@gmail.com)
 # Program:  Library for Impinj R2000 module.
-# Package:  pip3 install liscrc
-#           pip3 install pyserial
+# Package:  pip3 install liscrc pyserial
 # Drivers:  None.
 # History:  2020-02-18 Ver:1.0 [Heyn] Initialization
 #           2020-02-20 Ver:1.1 [Heyn] New add read & write & get_rf_port_return_loss function.
 #           2020-02-24 Ver:1.1 [Heyn] Bugfix:20200224
 #           2020-02-27 Ver:1.2 [Heyn] New add get(set)_frequency_region
 #           2020-03-02 Ver:1.2 [Heyn] Bugfix:20200302 The last message was not processed.
+#           2020-03-03 Ver:1.2 [Heyn] Optimize the code.
 
 __author__    = 'Heyn'
 __version__   = '1.2'
@@ -33,6 +33,7 @@ from .enums    import ImpinjR2KFastSwitchInventory
 
 from .protocol import ImpinjR2KProtocols
 from .constant import FREQUENCY_TABLES, READER_ANTENNA
+
 
 class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
     START = b'\xA0'
@@ -129,6 +130,15 @@ class ImpinjProtocolFactory( serial.threaded.FramedPacket ):
 
 class ImpinjR2KReader( object ):
 
+    def catch_exception( func ):
+        def wrapper( self, *args, **kwargs ):
+            try:
+                return func( self, *args, **kwargs )
+            except BaseException as err:
+                logging.error( str( err ) )
+                return 0
+        return wrapper
+
     def analyze_data( method='RESULT', timeout=3 ):
         def decorator( func ):
             def wrapper( self, *args, **kwargs ):
@@ -140,8 +150,8 @@ class ImpinjR2KReader( object ):
                     else:
                         return ( True if data['data'][0] == ImpinjR2KGlobalErrors.SUCCESS else False, ImpinjR2KGlobalErrors.to_string( data['data'][0] ) )
                 except BaseException as err:
-                    logging.debug( '[ERROR] ANALYZE_DATA error {} or COMMAND QUEUE is timeout.'.format( str(err) ) )
-                    return str( err )
+                    logging.error( '[ERROR] ANALYZE_DATA error {} or COMMAND QUEUE is timeout.'.format( err ) )
+                    return bytes( [ ImpinjR2KGlobalErrors.FAIL ] )
             return wrapper
         return decorator
 
@@ -292,6 +302,9 @@ class ImpinjR2KReader( object ):
     def inventory( self, repeat=0xFF ):
         self.protocol.inventory( repeat=repeat )
         value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+        if ( value[0] == ImpinjR2KGlobalErrors.ANTENNA_MISSING_ERROR ) or ( value[0] == ImpinjR2KGlobalErrors.FAIL ):
+            return 0
+
         try:
             antenna, tagcount, read_rate, read_total = struct.unpack( '>BHHI', value )
         except BaseException as err:
@@ -308,6 +321,8 @@ class ImpinjR2KReader( object ):
     def get_inventory_buffer_tag_count( self ):
         self.protocol.get_inventory_buffer_tag_count( )
         value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
+        if ( value[0] == ImpinjR2KGlobalErrors.ANTENNA_MISSING_ERROR ) or ( value[0] == ImpinjR2KGlobalErrors.FAIL ):
+            return 0
         count = struct.unpack( '>H', value )[0]
         logging.info( 'Inventory buffer tag count {}'.format( count ) )
         return count
@@ -331,42 +346,44 @@ class ImpinjR2KReader( object ):
             logging.error( 'TAGS CRC16 is ERROR.')
             return ''
 
-        rssi = data[-3]
-        ant  = ( data[-2] & 0x03 + 1 )
+        rssi = ( data[-3] - 129  )
+        ant  = ( data[-2] & 0x03 ) + 1 # Bugfix:20200303
         invcount = data[-1]
 
         logging.debug( '*'*50 )
         logging.debug( 'COUNT    : {}'.format( count ) )
         logging.debug( 'EPC      : {}'.format( epc   ) )
-        logging.debug( 'CRC      : {:X}'.format( crc   ) )
+        logging.debug( 'CRC      : {:X}'.format( crc ) )
         logging.debug( 'RSSI     : {}'.format( rssi  ) )
         logging.debug( 'ANT      : {}'.format( ant   ) )
-        logging.debug( 'INVCOUNT : {}'.format( invcount   ) )
+        logging.debug( 'INVCOUNT : {}'.format( invcount ) )
 
-        return epc
+        return ( ant, rssi, epc )
 
     def get_inventory_buffer( self, loop=1 ):
-        epc = []
+        """
+            @return : ( ant, rssi, epc ) -> tuple
+        """
+        tags = []
         self.protocol.get_inventory_buffer( )
         for _ in range( loop ):
             value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
-            epc.append( self.__unpack_inventory_buffer( value ) )
-        # ### Bugfix:20200302
-        # value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
-        # print(value)
-        # logging.info( 'GET_AND_RESET_INVENTORY_BUFFER = {}'.format( ImpinjR2KGlobalErrors.to_string( value[0] ) ) )
-        return epc
+            tags.append( self.__unpack_inventory_buffer( value ) )
+        return tags
 
     def get_and_reset_inventory_buffer( self, loop=1 ):
-        epc = []
+        """
+            @return : ( ant, rssi, epc ) -> tuple
+        """
+        tags = []
         self.protocol.get_and_reset_inventory_buffer( )
         for _ in range( loop ):
             value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
-            epc.append( self.__unpack_inventory_buffer( value ) )
+            tags.append( self.__unpack_inventory_buffer( value ) )
         ### Bugfix:20200302
         value = ImpinjR2KReader.analyze_data( 'DATA' )( lambda x, y : y )( self, None )
         logging.info( 'GET_AND_RESET_INVENTORY_BUFFER = {}'.format( ImpinjR2KGlobalErrors.to_string( value[0] ) ) )
-        return epc
+        return tags
     
     @analyze_data( )
     def reset_inventory_buffer( self ):

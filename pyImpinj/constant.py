@@ -9,7 +9,6 @@
 # Drivers:  None.
 # History:  2020-02-18 Ver:1.0 [Heyn] Initialization
 
-
 TAG_MEMORY_BANK = { 'RESERVED' : 0,
                     'EPC'      : 1,
                     'TID'      : 2,
