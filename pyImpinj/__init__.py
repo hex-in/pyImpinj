@@ -13,9 +13,10 @@
 #           2020-02-27 Ver:1.2 [Heyn] New add get(set)_frequency_region
 #           2020-03-02 Ver:1.2 [Heyn] Bugfix:20200302 The last message was not processed.
 #           2020-03-03 Ver:1.2 [Heyn] Optimize the code.
+#           2020-03-04 Ver:1.3 [Heyn] New add distance function.
 
 __author__    = 'Heyn'
-__version__   = '1.2'
+__version__   = '1.3'
 
 import os
 import queue
@@ -389,7 +390,7 @@ class ImpinjR2KReader( object ):
     def reset_inventory_buffer( self ):
         self.protocol.reset_inventory_buffer()
 
-    #-------------------------------------------------
+    # # # -------------------------------------------------
     @analyze_data( timeout=5 )
     def set_access_epc_match( self, mode=0, epc='00'*12 ):
         self.protocol.set_access_epc_match( mode=mode, epc=list( bytearray.fromhex( epc ) ) )
@@ -499,7 +500,7 @@ class ImpinjR2KReader( object ):
 
         return epc
 
-    #-------------------------------------------------
+    # # # -------------------------------------------------
     @analyze_data( )
     def set_frequency_region_user( self, start_khz, space_khz, quantity ):
         self.protocol.set_frequency_region_user( start=start_khz, space=space_khz, quantity=quantity )
@@ -539,3 +540,21 @@ class ImpinjR2KReader( object ):
                      FreqSpace = value[1] // 10,
                      Quantity  = value[2],
                      StartFreq = StartFreq )
+
+    # # # -------------------------------------------------
+    # # # Other functions.
+    def distance( self, rssi, A=60, n=3.5 ):
+        """ 
+            @Param
+                rssi : Signal strength
+                A : Signal strength at a distance of 1m between the transmitter and the receiver
+                n : Environmental factor ( 2 - 5)
+        """
+        return 10**( ( abs( rssi ) - A ) / ( 10 * n ) )
+
+    def get_average( self, data:list ):
+        return sum( data ) / len( data )
+
+    def get_variance( self, data:list ):
+        average = get_average( data )
+        return sum( [ ( x - average ) ** 2 for x in data ] ) / len( data )
